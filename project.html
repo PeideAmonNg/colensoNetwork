@@ -14,56 +14,76 @@
 <script src="plugins/sigma.canvas/sigma.canvas.hovers.def.js"></script>
 <script src="plugins/sigma.canvas/sigma.canvas.nodes.def.js"></script>
 <script src="plugins/sigma.canvas/sigma.canvas.labels.def.js"></script>
+<script src="plugins/sigma.layout.forceAtlas2/sigma.layout.forceAtlas2.min.js"></script>
+
+<script type="text/javascript" src="jLouvain.js"></script>
+<script type="text/javascript" src="my_parse_function.js"></script>
+
+<head>
+<link rel="stylesheet" type="text/css" href="mystyle.css">
+</head>
 
 
+<div id="outer-outer-box">
+    <div id="form-container">
+        <form id="form">
+            <input id="form_person_name" type="text" name="person" placeholder="name" autofocus>
+            <!-- <input id="form_query_return_limit" type="text" name="limit" placeholder="no. of nodes (default:10)"> -->
+            <input type="range" id="myRange" value="0" oninput="myRangeChanged()" onmouseup="myRangeReleased()">
+            <label id="myRangeLabel" for="myRange">0 edges</label>
+            <select id="importantNodes">
+                <option value="volvo">Degree</option>
+                <option value="saab">edge</option>
+                <option value="opel">Opel</option>
+                <option value="audi">Audi</option>
+            </select>
+            <select id="communityDetection">
+                <option value="volvo">Louvain method</option>
+                <option value="saab">Girvan-Newman method</option>
+                <option value="opel">Opel</option>
+                <option value="audi">Audi</option>
+            </select>
+            <input type="submit" value="Search" id="search">
 
-<style>
-    html{
-        background-color: #F9F7ED;
-    }
-        #graph-container {
-            border: 1px #D3D3D3 solid;
-            background-color: white;
-            /*max-width: 100%;*/
-            width: 60%;
-            height: 80vh;
-            margin: 0 auto;
-        }
+        </form>
+    </div>
+    <br>
 
-        #form-container{
-            display: inline-block;
-        }
-</style>
-
-<div id="form-container">
-    <form id="form">
-        <input id="form_person_name" type="text" name="person" placeholder="name" autofocus>
-        <input id="form_query_return_limit" type="text" name="limit" placeholder="limit">
-        <input type="submit" value="Search" id="search">
-
-    </form>
+    <div id="outer-box">
+        <div id="info-box"></div>
+        <div id="graph-container"></div>
+    </div>
 </div>
-
-<div id="graph-container"></div>
-
 <script>
-    document.getElementById("form").onsubmit = function() {
-        console.log(document.getElementById("form_person_name").value);
-        query(document.getElementById("form_person_name").value, document.getElementById("form_query_return_limit").value);
-        return false;
-    };
+    
     
 </script>
 
 <script type="application/javascript">
-
     
-    
+    function newGraphSubmit(def = document.getElementById("myRange").value*5){
+        query(document.getElementById("form_person_name").value, def);
+        // query(document.getElementById("form_person_name").value, document.getElementById("form_query_return_limit").value);
+    }
 
+    document.getElementById("form").onsubmit = function() {
+        console.log(document.getElementById("form_person_name").value);      
+        newGraphSubmit();  
+        return false;
+    };
+
+    function myRangeChanged(){
+        document.getElementById("myRangeLabel").innerHTML = document.getElementById("myRange").value * 5 + " edges";        
+    }
+
+    function myRangeReleased(){ 
+        newGraphSubmit(document.getElementById("myRange").value * 5);
+    }
+   
     var settings={
-        maxNodeSize: 15,
-        minNodeSize: 1,
-        minEdgeSize: 0.5,
+        maxNodeSize: 10,
+        minNodeSize: 2,
+        minEdgeSize: 0.3,
         maxEdgeSize: 10,
         borderSize: 5,
         defaultNodeBorderColor: "gray",
@@ -77,7 +97,7 @@
         // defaultNodeOuterBorderColor: 'rgb(236, 81, 72)',
         enableEdgeHovering: true,        
         edgeHoverColor: 'default',
-        defaultEdgeHoverColor: '#000',
+        defaultEdgeHoverColor: '#333330',
         edgeHoverSizeRatio: 1,
         edgeHoverExtremities: true,
 
@@ -85,23 +105,24 @@
         //In sigma.canvas.hovers.def.js
         nodeBorderSize: 2,        
         nodeHoverColor: "default",
-        defaultNodeHoverColor: "black",
-        defaultNodeBorderColor: 'black',
+        defaultNodeHoverColor: "#333330",
+        defaultNodeBorderColor: '#333330',
         // nodeHoverBorderColor: 'black',
         // nodeOuterBorderSize: 3,
         // defaultNodeOuterBorderColor: 'black',
 
-        labelHoverColor: 'default',
-        defaultLabelHoverColor: "white",
+        // labelHoverColor: 'default',
+        // defaultLabelHoverColor: "white",
 
-        labelHoverBGColor:'default',
-        defaultHoverLabelBGColor: 'black',
+        // labelHoverBGColor:'default',
+        // defaultHoverLabelBGColor: '#242421',
 
         labelSize: "fixed",
-        // labelSizeRatio: 0.7,
-        labelThreshold: 0.6,
+        labelSizeRatio: 1.5,
+        // labelThreshold: 0.6,
+		labelThreshold: 5,    
 
-        edgeHoverPrecision: 1
+        edgeHoverPrecision: 0.1
     };
 
     var sig = {
@@ -112,7 +133,7 @@
             }
         ], settings: settings
     };
-
+    
 
     query=function(person, limit){
 
@@ -120,10 +141,20 @@
         //Config variables
         var neo4j={ url: 'http://localhost:7474', user: 'neo4j', password: 'p' };
         var endpoint = '/db/data/transaction/commit', data, cypherCallback;
-        var cypher="match((n:Person)-[r:SENDS_TO]->(rec:Person)) WHERE n.name=~{person} OR rec.name=~{person} return n, rec, count(r) as count LIMIT {l}";    
+        //var cypher="match((n:Person)-[r:SENDS_TO]->(rec:Person)) WHERE n.name=~{person} OR rec.name=~{person} return n, rec, count(r), avg(r.length) as count, id(n) as senderid, id(rec) as recid, count (distinct rec) as rec_count LIMIT {l}";    
+		var cypher="match((n)-[r:SENDS_TO]->(rec)) WHERE n.name=~{person} OR rec.name=~{person} return n, rec, count(r), avg(r.length) as count, id(n) as senderid, id(rec) as recid, count (distinct rec) as rec_count LIMIT {l}";    
+        
+        
+        /**Get number of distinct recipients, for each sender.*/
+        //var outdegree="match(sender-[sends:SENDS_TO]->rec) return id(sender), sender.name,  count( distinct rec) as rec_count ORDER BY rec_count DESC";
+        
+        /**Get outdegree+indegree for each node (:PERSON).*/
+        //var degreeQuery="match((sender:Person)-[sends:SENDS_TO]-(rec:Person)) return id(sender), sender.name,  count( rec) as rec_count ORDER BY rec_count DESC;";
+		var degreeQuery="match((sender)-[sends:SENDS_TO]-(rec)) return id(sender), sender.name,  count( rec) as rec_count ORDER BY rec_count DESC;";
+        
         // var sig ={ container: 'graph-container', settings: settings};
         
-        limit = !limit ? 5 : limit;
+        limit = !limit ? 10 : limit;
 
         var data = JSON.stringify({
                 "statements": [
@@ -131,8 +162,14 @@
                         "statement": cypher,
                         "parameters": {
                             "person": '^(?i).*('+person+').*$',
-                            "l": parseInt(limit)
+                            "l": parseInt(limit),
+//                            "randomOffset": Math.random()*50
                         },
+                        "resultDataContents": ["row", "graph"],
+                        "includeStats": false
+                    },
+                    {
+                        "statement": degreeQuery,                        
                         "resultDataContents": ["row", "graph"],
                         "includeStats": false
                     }
@@ -140,10 +177,51 @@
             });
 
         callback=function(response){
-            // console.log(response);
+             console.log(response);
 
             //Modify this function, adding edges and thickness.
             var graph=parse(response);
+
+            var atlasConfig={
+                strongGravityMode: true,
+                slowDown: 20
+            };
+
+
+            console.log("before1");
+            console.log(graph);
+            console.log("after1");
+
+            var nodes = [];
+
+            graph.nodes.forEach(function(element, index, array) {
+                nodes.push(element.id);
+            });
+
+
+            var community = jLouvain().nodes(nodes).edges(graph.edges);
+            var t = Date.now();
+            var comm_asgn = community();
+            var delta = (Date.now() - t)/1000;
+            console.log("louvain method took " + delta + "s");
+
+            var colorArray = [];
+            for (var j = 0; j < 30; j++){
+                var rgb = [];
+                for(var i = 0; i < 3; i++){
+                    rgb.push(Math.floor(Math.random() * 255));
+                }      
+                colorArray.push('rgb('+ rgb.join(',') +')');
+            };
+            
+            graph.nodes.forEach(function(element, index, array) {
+                element.color = colorArray[comm_asgn[element.id]];
+            });
+
+            console.log("before2");
+            console.log(graph);
+            console.log("before2");
+
 
             //Then do the following to render graph:
 
@@ -151,130 +229,56 @@
                 sig = new sigma(sig); 
                 sig.graph.read(graph);
                 sig.refresh();
+                sig.startForceAtlas2(atlasConfig);
                 console.log(false);
             }else{
                 console.log(true);
+                sig.killForceAtlas2();
                 sig.graph.clear(); 
                 sig.refresh()
                 sig.graph.read(graph);
                 sig.refresh();
-                
+                sig.startForceAtlas2(atlasConfig);
             }
+           
+            //overNode outNode clickNode  rightClickNode
+            sig.bind('clickNode', function(e){
+                response.results[0].data.forEach(function (data, i, a) {
+//                    result.results[1].data;
+                });
+                document.getElementById('info-box').innerHTML="nodeid: "+e.data.node.id+
+                    ' <br> name: '+e.data.node.label+' <br> key: '+e.data.node;
+                console.log(e); 
+            });
             
+            sig.bind('clickEdge', function(e){
+                response.results[0].data.forEach(function (data, i, a) {
+                   // result.results[1].data;
+                });
+                document.getElementById('info-box').innerHTML='<h3>Edge ' + e.data.edge.id + '</h3>' + e.data.edge.label;
+                   'nodeid: '+e.data.node.id+ ' <br> name: '+e.data.node.label+' <br> key: '+e.data.node;
+                console.log(e); 
+            });
+            
+//            sig.bind('overEdge outEdge clickEdge doubleClickEdge rightClickEdge', function(e) {
+//                document.getElementById('info-box').innerHTML="time is "+new Date().getTime();
+//                alert(e);
+//            });
+//            sig.bind('clickStage', function(e) {
+//                document.getElementById('info-box').innerHTML="time is "+new Date().getTime();
+//                alert(e);
+//            });
+//            sig.bind('doubleClickStage rightClickStage', function(e) {
+//                document.getElementById('info-box').innerHTML="time is "+new Date().getTime();
+//                alert(e);
+//            });
+            
+            // window.setTimeout(function(){sig.stopForceAtlas2();}, 15000);
             
         }
-
-        alert(limit);
-
+		
         sigma.neo4j.send(neo4j, endpoint, 'POST', data, callback);
 
-        //This function parse a neo4j cypher query result, and transform it into a sigma graph object.
-    parse=function(result) {
-        var graph = { nodes: [], edges: [] },
-            nodesMap = {},
-            edgesMap = {},
-            key;
-
-        console.log(result);
-
-        var maxFreq=0;
-        result.results[0].data.forEach(function (data){
-            if(data.row[2]>maxFreq){
-                maxFreq=data.row[2];
-                console.log("freq: "+maxFreq);
-                console.log("rec: "+data.graph.nodes[1].properties["name"]);
-            }
-        });
-
-        console.log("maxFreq: "+maxFreq);
-
-        var edgeId=0;
-
-        // Iteration on all result data
-        result.results[0].data.forEach(function (data, index, arr) {
-
-            if(data.graph.nodes[1]==null){
-                return;
-            }
-
-            var node=data.graph.nodes[0];
-
-            var node1 =  {
-                id : node.id,
-                label : node.properties["name"].substr(node.properties["name"].length-5, 5),
-                x : getX(),
-                y : getY(),
-                size : 1,      
-                neo4j_labels : node.labels,
-                neo4j_data : node.properties
-            };
-
-
-
-            if (node1.id in nodesMap) {
-                // do nothing
-            } else {
-                nodesMap[node1.id] = node1;
-            }
-            
-            // console.log("index: "+index);
-            node=data.graph.nodes[1];
-
-            var node2 =  {
-                id : node.id,
-                label : node.properties["name"].substr(node.properties["name"].length-5, 5),
-                x : getX(),
-                y : getY(),
-                size : 1,      
-                neo4j_labels : node.labels,
-                neo4j_data : node.properties
-            };
-
-            if (node2.id in nodesMap) {
-                // do nothing
-            } else {
-                nodesMap[node2.id] = node2;
-            }   
-
-            console.log("freq: "+data.row[2]);
-            if(data.row[2]==null || data.row[2]==" " || data.row[2]==""){
-                alert("null alert");
-            }
-
-            var sigmaEdge =  {
-                id : edgeId,
-                label : "freq: "+data.row[2],
-                source : node1.id,
-                target : node2.id,
-                size : data.row[2]/maxFreq,
-                color: getEdgeColor(data.row[2]),
-                neo4j_type : "sends_to",
-                neo4j_data : "data"
-            };
-
-            edgeId++;
-
-            if (sigmaEdge.id in edgesMap) {
-                // do nothing
-            } else {
-                edgesMap[sigmaEdge.id] = sigmaEdge;
-            }
-
-        });
-
-        console.log(edgesMap);
-
-        // construct sigma nodes
-        for (key in nodesMap) {
-            graph.nodes.push(nodesMap[key]);
-        }
-        // construct sigma nodes
-        for (key in edgesMap) {
-            graph.edges.push(edgesMap[key]);
-        }
-
-        return graph;
-    };
 
     getX=function(){
         return Math.random();
@@ -285,11 +289,10 @@
     }
 
     getEdgeColor=function(freq){
-        return "#ff756e";
+        return "#727272";
     }
 
-
-}
+};
 
 document.onload=query('');
 

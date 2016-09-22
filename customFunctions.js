@@ -125,7 +125,7 @@
 
             var sigmaEdge =  {
                 id : edgeId,
-                label : "frequency: "+data.row[2],
+                label : "frequency: " + data.row[2],
                 source : node1.id,
                 target : node2.id,
                 size : data.row[2]/maxFreq,

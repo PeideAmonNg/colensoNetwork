@@ -1,0 +1,36 @@
+html{
+    background-color: #F1F1F1;
+}
+
+#graph-container {
+    border: 1px #D3D3D3 solid;
+    background-color: white;
+    /*max-width: 100%;*/
+    width: 70%;
+    height: 90vh;
+    float:right;
+}
+
+#info-box{
+    border: 1px #D3D3D3 solid;
+    background-color: white;
+    /*max-width: 100%;*/
+    width: 20%;
+    height: 90vh;
+    float:left;
+}
+
+#outer-outer-box{
+    width: 90%;
+    height: 90hv;
+    margin: 0 auto;
+}
+
+#outer-box{
+    padding-top: 3vh            
+}
+
+#form-container{
+    /*width: 90%;    */
+    display: inline-block;
+}
